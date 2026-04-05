@@ -57,12 +57,15 @@ namespace Backend.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Priority")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<int>("CreatedById")
-                        .HasColumnType("integer");
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
@@ -75,16 +78,13 @@ namespace Backend.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
                     b.HasKey("Id");
 
                     b.HasIndex("AssignedUserId");
 
                     b.HasIndex("ProjectId");
 
-                    b.HasQueryFilter((System.Linq.Expressions.LambdaExpression)(System.Linq.Expressions.Expression<System.Func<System.Collections.Generic.Dictionary<string, object>, bool>>)(task => !Microsoft.EntityFrameworkCore.EF.Property<bool>(task, "IsDeleted")));
+                    b.HasQueryFilter((System.Linq.Expressions.LambdaExpression)(System.Linq.Expressions.Expression<System.Func<Backend.Models.Entities.TaskItem, bool>>)(task => !task.IsDeleted));
 
                     b.ToTable("Tasks");
                 });
@@ -118,15 +118,15 @@ namespace Backend.Migrations
 
             modelBuilder.Entity("Backend.Models.Entities.TaskItem", b =>
                 {
-                    b.HasOne("Backend.Models.Entities.User", "AssignedUser")
-                        .WithMany()
-                        .HasForeignKey("AssignedUserId");
-
                     b.HasOne("Backend.Models.Entities.Project", "Project")
                         .WithMany()
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("Backend.Models.Entities.User", "AssignedUser")
+                        .WithMany()
+                        .HasForeignKey("AssignedUserId");
 
                     b.Navigation("AssignedUser");
 

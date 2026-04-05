@@ -45,6 +45,12 @@ public class TaskController : ControllerBase
         return Ok(ApiResponseDto<object>.Ok(null, "Task deleted"));
     }
 
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        return Ok(await _service.GetById(id));
+    }
+
     [HttpPatch("{id}/status")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateTaskStatusDto dto)
     {
@@ -58,4 +64,5 @@ public class TaskController : ControllerBase
         var task = await _service.Assign(id, dto.UserId);
         return Ok(ApiResponseDto<Backend.Models.Entities.TaskItem>.Ok(task, "Task assigned"));
     }
-}
+
+ }

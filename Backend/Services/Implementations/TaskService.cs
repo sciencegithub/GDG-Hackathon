@@ -21,7 +21,8 @@ public class TaskService : ITaskService
         {
             Title = dto.Title,
             Description = dto.Description,
-            ProjectId = dto.ProjectId
+            ProjectId = dto.ProjectId,
+            DueDate = dto.DueDate
         };
 
         _context.Tasks.Add(task);
@@ -45,6 +46,11 @@ public class TaskService : ITaskService
         return await query.ToListAsync();
     }
 
+    public async Task<TaskItem> GetById(Guid taskId)
+    {
+        return await GetTaskByIdOrThrowAsync(taskId);
+    }
+
     public async Task<TaskItem> Update(Guid taskId, UpdateTaskDto dto)
     {
         var task = await GetTaskByIdOrThrowAsync(taskId);
@@ -54,6 +60,7 @@ public class TaskService : ITaskService
         task.Status = dto.Status;
         task.Priority = dto.Priority;
         task.AssignedUserId = dto.AssignedUserId;
+        task.DueDate = dto.DueDate;
 
         await _context.SaveChangesAsync();
 
