@@ -7,7 +7,7 @@ using Backend.Services.Interfaces;
 
 [ApiController]
 [Route("api/tasks")]
-[Authorize]
+// [Authorize]
 public class TaskController : ControllerBase
 {
     private readonly ITaskService _service;
@@ -29,6 +29,12 @@ public class TaskController : ControllerBase
         return Ok(await _service.GetAll(status, assignedTo));
     }
 
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        return Ok(await _service.GetById(id));
+    }
+
     [HttpPatch("{id}/status")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateTaskStatusDto dto)
     {
@@ -39,5 +45,18 @@ public class TaskController : ControllerBase
     public async Task<IActionResult> Assign(Guid id, [FromBody] AssignTaskDto dto)
     {
         return Ok(await _service.Assign(id, dto.UserId));
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTaskDto dto)
+    {
+        return Ok(await _service.Update(id, dto));
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        await _service.Delete(id);
+        return NoContent();
     }
 }

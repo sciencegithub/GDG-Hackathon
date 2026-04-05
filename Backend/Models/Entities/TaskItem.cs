@@ -11,14 +11,15 @@ public class TaskItem
     public string Status { get; set; } = "Todo"; // Todo, InProgress, Done
     public string Priority { get; set; } = "Medium";
 
-    public int CreatedById { get; set; }   //  ownership
+    // public int CreatedById { get; set; }   //  ownership - disabled for now
 
     public Guid ProjectId { get; set; }
-    public Project Project { get; set; }= null!;
+    public Project Project { get; set; } = null!;
 
     public Guid? AssignedUserId { get; set; }
     public User? AssignedUser { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? DueDate { get; set; } // Optional due date for tasks
     public bool IsDeleted { get; set; } = false; // soft delete
 }
