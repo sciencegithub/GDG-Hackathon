@@ -236,44 +236,40 @@
 
 ---
 
-## 🐳 Run With Docker
+## 📊 Class Diagram
 
-This project uses Docker Compose from the Backend folder. It starts the API and a PostgreSQL container together.
-
-### 1. Go to the backend folder
-
-```bash
-cd Backend
-```
-
-### 2. Make sure `.env` exists
-
-The backend expects these values in `Backend/.env`:
-
-- `POSTGRES_DB`
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-- `CONNECTION_STRING`
-
-### 3. Start the containers
-
-```bash
-docker compose up --build
-```
-
-### 4. Open the API
-
-- API: `http://localhost:5000`
-- Swagger: `http://localhost:5000/swagger`
-
-### 5. Stop the containers
-
-```bash
-docker compose down
-```
-
-If you want to remove the database volume too:
-
-```bash
-docker compose down -v
-```
+```mermaid
+classDiagram
+    class User {
+        +int Id
+        +string Username
+        +string Email
+        +string PasswordHash
+        +string Role
+        +Register()
+        +Login()
+    }
+    
+    class Project {
+        +int Id
+        +string Name
+        +string Description
+        +int OwnerId
+        +CreateProject()
+    }
+    
+    class Task {
+        +int Id
+        +string Title
+        +string Description
+        +string Status
+        +string Priority
+        +int ProjectId
+        +int AssignedUserId
+        +UpdateStatus()
+        +AssignUser()
+    }
+    
+    User "1" -- "*" Project : Owns
+    User "1" -- "*" Task : Assigned To
+    Project "1" -- "*" Task : Contains
