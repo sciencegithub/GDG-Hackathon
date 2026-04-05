@@ -115,8 +115,8 @@
 - [ ] Filtering
 - [ ] Seeding (test data)
 - [ ] API versioning (`/api/v1`)
-- [ ] Rate limiting
-- [ ] Soft delete
+- [X] Rate limiting
+- [X] Soft delete
 
 ### 🔥 BONUS
 
