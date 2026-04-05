@@ -126,7 +126,7 @@
 - [x] Validation (FluentValidation)
 - [ ] Logging (Serilog or basic)
 - [X] CORS
-- [ ] Exception middleware
+- [X] Exception middleware
 
 ### ⚡ SHOULD HAVE
 
