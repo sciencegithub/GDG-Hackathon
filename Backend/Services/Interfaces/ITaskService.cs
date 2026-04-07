@@ -7,6 +7,7 @@ public interface ITaskService
 {
     Task<TaskItem> Create(CreateTaskDto dto, Guid actorUserId);
     Task<List<TaskItem>> GetAll(string? status, Guid? assignedTo);
+    Task<PaginatedResponseDto<TaskItem>> GetAllPaginatedAsync(TaskQueryDto query);
     Task<TaskItem> GetById(Guid taskId);
     Task<TaskItem> Update(Guid taskId, UpdateTaskDto dto, Guid actorUserId);
     Task Delete(Guid taskId);
