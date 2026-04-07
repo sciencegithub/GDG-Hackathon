@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
     public DbSet<Project> Projects { get; set; }
     public DbSet<TaskItem> Tasks { get; set; }
     public DbSet<TaskComment> Comments { get; set; }
+    public DbSet<ChecklistItem> ChecklistItems { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -18,6 +19,7 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<TaskItem>().HasQueryFilter(task => !task.IsDeleted);
         modelBuilder.Entity<TaskComment>().HasQueryFilter(comment => !comment.IsDeleted);
+        modelBuilder.Entity<ChecklistItem>().HasQueryFilter(item => !item.IsDeleted);
 
         // Foreign key relationships
         modelBuilder.Entity<TaskComment>()
@@ -31,5 +33,11 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(tc => tc.AuthorId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ChecklistItem>()
+            .HasOne(ci => ci.Task)
+            .WithMany()
+            .HasForeignKey(ci => ci.TaskId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
