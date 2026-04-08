@@ -22,14 +22,25 @@ public class ProjectService : IProjectService
             .ToListAsync();
     }
 
+    public async Task<List<Project>> GetAccessibleProjects(Guid userId, bool elevatedAccess)
+    {
+        var query = _context.Projects.AsNoTracking().AsQueryable();
+
+        if (elevatedAccess)
+            return await query.ToListAsync();
+
+        return await query
+            .Where(p => p.OwnerUserId == userId || _context.Tasks.Any(t => t.ProjectId == p.Id && t.AssignedUserId == userId))
+            .ToListAsync();
+    }
+
     public async Task<Project> Create(ProjectDto dto, Guid creatorUserId)
     {
-        _ = creatorUserId;
-
         var project = new Project
         {
             Name = dto.Name,
-            Description = dto.Description
+            Description = dto.Description,
+            OwnerUserId = creatorUserId
         };
 
         _context.Projects.Add(project);
@@ -67,5 +78,34 @@ public class ProjectService : IProjectService
         _context.Projects.Remove(project);
         await _context.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<bool> ProjectExists(Guid id)
+    {
+        return await _context.Projects
+            .AsNoTracking()
+            .AnyAsync(p => p.Id == id);
+    }
+
+    public async Task<bool> HasReadAccess(Guid projectId, Guid userId, bool elevatedAccess)
+    {
+        if (elevatedAccess)
+            return await ProjectExists(projectId);
+
+        return await _context.Projects
+            .AsNoTracking()
+            .AnyAsync(p => p.Id == projectId &&
+                           (p.OwnerUserId == userId ||
+                            _context.Tasks.Any(t => t.ProjectId == p.Id && t.AssignedUserId == userId)));
+    }
+
+    public async Task<bool> HasWriteAccess(Guid projectId, Guid userId, bool elevatedAccess)
+    {
+        if (elevatedAccess)
+            return await ProjectExists(projectId);
+
+        return await _context.Projects
+            .AsNoTracking()
+            .AnyAsync(p => p.Id == projectId && p.OwnerUserId == userId);
     }
 }

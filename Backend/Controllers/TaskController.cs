@@ -13,17 +13,28 @@ using System.Security.Claims;
 public class TaskController : ControllerBase
 {
     private readonly ITaskService _service;
+    private readonly IProjectService _projectService;
 
-    public TaskController(ITaskService service)
+    public TaskController(ITaskService service, IProjectService projectService)
     {
         _service = service;
+        _projectService = projectService;
     }
 
     [HttpPost]
     [Authorize(Policy = "TaskWrite")]
     public async Task<IActionResult> Create([FromBody] CreateTaskDto dto)
     {
-        var task = await _service.Create(dto, GetCurrentUserId());
+        var currentUserId = GetCurrentUserId();
+
+        if (!await _projectService.ProjectExists(dto.ProjectId))
+            return NotFound(ApiResponseDto<object>.Fail("Project not found"));
+
+        var canWrite = await _projectService.HasWriteAccess(dto.ProjectId, currentUserId, HasElevatedAccess());
+        if (!canWrite)
+            return Forbid();
+
+        var task = await _service.Create(dto, currentUserId);
         return Ok(ApiResponseDto<Backend.Models.Entities.TaskItem>.Ok(task, "Task created"));
     }
 

@@ -74,9 +74,9 @@ public class CommentService : ICommentService
         return result;
     }
 
-    public async Task<CommentDto> UpdateCommentAsync(Guid commentId, Guid userId, UpdateCommentDto dto)
+    public async Task<CommentDto> UpdateCommentAsync(Guid taskId, Guid commentId, Guid userId, UpdateCommentDto dto)
     {
-        var comment = await GetCommentByIdOrThrowAsync(commentId);
+        var comment = await GetCommentByIdOrThrowAsync(taskId, commentId);
 
         // Only author can edit their comment
         if (comment.AuthorId != userId)
@@ -90,9 +90,9 @@ public class CommentService : ICommentService
         return await MapToCommentDtoAsync(comment);
     }
 
-    public async Task DeleteCommentAsync(Guid commentId, Guid userId)
+    public async Task DeleteCommentAsync(Guid taskId, Guid commentId, Guid userId)
     {
-        var comment = await GetCommentByIdOrThrowAsync(commentId);
+        var comment = await GetCommentByIdOrThrowAsync(taskId, commentId);
 
         // Only author can delete their comment
         if (comment.AuthorId != userId)
@@ -102,11 +102,11 @@ public class CommentService : ICommentService
         await _context.SaveChangesAsync();
     }
 
-    private async Task<TaskComment> GetCommentByIdOrThrowAsync(Guid commentId)
+    private async Task<TaskComment> GetCommentByIdOrThrowAsync(Guid taskId, Guid commentId)
     {
         var comment = await _context.Comments
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(c => c.Id == commentId && !c.IsDeleted);
+            .FirstOrDefaultAsync(c => c.TaskId == taskId && c.Id == commentId && !c.IsDeleted);
 
         if (comment == null)
             throw new KeyNotFoundException("Comment not found");

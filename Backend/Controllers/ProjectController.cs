@@ -22,7 +22,7 @@ public class ProjectController : ControllerBase
     [Authorize(Policy = "ProjectRead")]
     public async Task<IActionResult> GetAll()
     {
-        var projects = await _service.GetAll();
+        var projects = await _service.GetAccessibleProjects(GetCurrentUserId(), HasElevatedAccess());
         return Ok(ApiResponseDto<List<Backend.Models.Entities.Project>>.Ok(projects, "Projects retrieved"));
     }
 
@@ -35,8 +35,16 @@ public class ProjectController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [Authorize(Policy = "ProjectRead")]
     public async Task<IActionResult> GetById(Guid id)
     {
+        if (!await _service.ProjectExists(id))
+            return NotFound(ApiResponseDto<object>.Fail("Project not found"));
+
+        var canRead = await _service.HasReadAccess(id, GetCurrentUserId(), HasElevatedAccess());
+        if (!canRead)
+            return Forbid();
+
         var project = await _service.GetById(id);
         if (project == null)
             return NotFound(ApiResponseDto<object>.Fail("Project not found"));
@@ -45,8 +53,16 @@ public class ProjectController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Policy = "ProjectWrite")]
     public async Task<IActionResult> Update(Guid id, [FromBody] ProjectDto dto)
     {
+        if (!await _service.ProjectExists(id))
+            return NotFound(ApiResponseDto<object>.Fail("Project not found"));
+
+        var canWrite = await _service.HasWriteAccess(id, GetCurrentUserId(), HasElevatedAccess());
+        if (!canWrite)
+            return Forbid();
+
         var project = await _service.Update(id, dto);
         if (project == null)
             return NotFound(ApiResponseDto<object>.Fail("Project not found"));
@@ -55,13 +71,26 @@ public class ProjectController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = "ProjectWrite")]
     public async Task<IActionResult> Delete(Guid id)
     {
+        if (!await _service.ProjectExists(id))
+            return NotFound(ApiResponseDto<object>.Fail("Project not found"));
+
+        var canWrite = await _service.HasWriteAccess(id, GetCurrentUserId(), HasElevatedAccess());
+        if (!canWrite)
+            return Forbid();
+
         var result = await _service.Delete(id);
         if (!result)
             return NotFound(ApiResponseDto<object>.Fail("Project not found"));
 
         return Ok(ApiResponseDto<object>.Ok(null, "Project deleted"));
+    }
+
+    private bool HasElevatedAccess()
+    {
+        return User.IsInRole("Admin") || User.IsInRole("Manager");
     }
 
     private Guid GetCurrentUserId()

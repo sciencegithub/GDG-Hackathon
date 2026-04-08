@@ -14,6 +14,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using AspNetCoreRateLimit;
+using Serilog;
+using Microsoft.Extensions.Options;
 
 // Load .env file - try from current directory, ignore if not found
 try
@@ -27,6 +29,12 @@ catch
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseSerilog((context, services, configuration) =>
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext());
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAllOrigins", policy =>
@@ -36,6 +44,26 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader();
     });
 });
+
+builder.Services.Configure<SeedingOptions>(builder.Configuration.GetSection("Seeding"));
+
+var redisConnectionString =
+    Environment.GetEnvironmentVariable("REDIS_CONNECTION_STRING")
+    ?? builder.Configuration.GetConnectionString("Redis")
+    ?? builder.Configuration["Redis:ConnectionString"];
+
+if (string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    builder.Services.AddDistributedMemoryCache();
+}
+else
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = builder.Configuration["Redis:InstanceName"] ?? "GDGHackathon:";
+    });
+}
 
 // Rate Limiting Configuration
 builder.Services.AddMemoryCache();
@@ -126,6 +154,7 @@ builder.Services.AddScoped<ILabelService, LabelService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ITaskWatcherService, TaskWatcherService>();
 builder.Services.AddScoped<ITaskAttachmentService, TaskAttachmentService>();
+builder.Services.AddScoped<DataSeeder>();
 builder.Services.AddScoped<IValidator<CreateTaskDto>, CreateTaskDtoValidator>();
 builder.Services.AddScoped<IValidator<UpdateTaskStatusDto>, UpdateTaskStatusDtoValidator>();
 builder.Services.AddScoped<IValidator<AssignTaskDto>, AssignTaskDtoValidator>();
@@ -162,6 +191,8 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+app.UseSerilogRequestLogging();
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
@@ -179,22 +210,33 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var seedingOptions = scope.ServiceProvider.GetRequiredService<IOptions<SeedingOptions>>().Value;
 
     try
     {
         if (DatabaseHasExistingSchema(db))
         {
-            Console.WriteLine("⚠️ Database schema already exists, skipping initial migration");
+            app.Logger.LogWarning("Database schema already exists, skipping initial migration");
         }
         else
         {
             db.Database.Migrate();
-            Console.WriteLine("✅ Database migrated successfully");
+            app.Logger.LogInformation("Database migrated successfully");
+        }
+
+        if (seedingOptions.Enabled)
+        {
+            var dataSeeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
+            await dataSeeder.SeedAsync(seedingOptions);
+        }
+        else
+        {
+            app.Logger.LogInformation("Database seeding is disabled");
         }
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"❌ Database migration failed: {ex.Message}");
+        app.Logger.LogCritical(ex, "Database migration failed");
         throw; // Re-throw to fail fast in container
     }
 }

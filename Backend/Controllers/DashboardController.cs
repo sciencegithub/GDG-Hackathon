@@ -1,11 +1,12 @@
 namespace Backend.Controllers;
 
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Backend.Services.Interfaces;
 
 [ApiController]
 [Route("api/dashboard")]
-// [Authorize] - disabled
+[Authorize]
 public class DashboardController : ControllerBase
 {
     private readonly IDashboardService _service;
@@ -16,6 +17,7 @@ public class DashboardController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> GetStats()
     {
         return Ok(await _service.GetDashboardStats());

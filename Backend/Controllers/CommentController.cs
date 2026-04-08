@@ -25,7 +25,7 @@ public class CommentController : ControllerBase
     /// Only authenticated users can add comments (will be extended with permissions)
     /// </summary>
     [HttpPost]
-    [Authorize(Policy = "TaskRead")]
+    [Authorize(Policy = "TaskWrite")]
     public async Task<IActionResult> AddComment(Guid taskId, [FromBody] CreateCommentDto dto)
     {
         try
@@ -58,6 +58,7 @@ public class CommentController : ControllerBase
     {
         try
         {
+            await EnsureTaskAccessAsync(taskId);
             var comments = await _service.GetTaskCommentsAsync(taskId);
             return Ok(ApiResponseDto<List<CommentDto>>.Ok(comments, "Comments retrieved successfully"));
         }
@@ -65,19 +66,24 @@ public class CommentController : ControllerBase
         {
             return NotFound(ApiResponseDto<object>.Fail(ex.Message));
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     /// <summary>
     /// Update a comment (only author can edit)
     /// </summary>
     [HttpPut("{commentId}")]
-    [Authorize(Policy = "TaskRead")]
+    [Authorize(Policy = "TaskWrite")]
     public async Task<IActionResult> UpdateComment(Guid taskId, Guid commentId, [FromBody] UpdateCommentDto dto)
     {
         try
         {
+            await EnsureTaskAccessAsync(taskId);
             var userId = GetCurrentUserId();
-            var comment = await _service.UpdateCommentAsync(commentId, userId, dto);
+            var comment = await _service.UpdateCommentAsync(taskId, commentId, userId, dto);
 
             return Ok(ApiResponseDto<CommentDto>.Ok(comment, "Comment updated successfully"));
         }
@@ -95,13 +101,14 @@ public class CommentController : ControllerBase
     /// Delete a comment (only author can delete)
     /// </summary>
     [HttpDelete("{commentId}")]
-    [Authorize(Policy = "TaskRead")]
+    [Authorize(Policy = "TaskWrite")]
     public async Task<IActionResult> DeleteComment(Guid taskId, Guid commentId)
     {
         try
         {
+            await EnsureTaskAccessAsync(taskId);
             var userId = GetCurrentUserId();
-            await _service.DeleteCommentAsync(commentId, userId);
+            await _service.DeleteCommentAsync(taskId, commentId, userId);
 
             return Ok(ApiResponseDto<object>.Ok(null, "Comment deleted successfully"));
         }

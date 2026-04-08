@@ -22,6 +22,12 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.Entity<Project>()
+            .HasOne(p => p.OwnerUser)
+            .WithMany()
+            .HasForeignKey(p => p.OwnerUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         modelBuilder.Entity<TaskItem>().HasQueryFilter(task => !task.IsDeleted);
         modelBuilder.Entity<TaskComment>().HasQueryFilter(comment => !comment.IsDeleted);
         modelBuilder.Entity<ChecklistItem>().HasQueryFilter(item => !item.IsDeleted);

@@ -29,6 +29,7 @@ public class TaskWatcherController : ControllerBase
     {
         try
         {
+            await EnsureTaskAccessAsync(taskId);
             var userId = GetCurrentUserId();
             await _watcherService.AddWatcherAsync(taskId, userId);
             return Ok(ApiResponseDto<object>.Ok(null, "You are now watching this task"));
@@ -40,6 +41,10 @@ public class TaskWatcherController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(ApiResponseDto<object>.Fail(ex.Message));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -56,6 +61,7 @@ public class TaskWatcherController : ControllerBase
     {
         try
         {
+            await EnsureTaskAccessAsync(taskId);
             await _watcherService.AddWatcherAsync(taskId, userId);
             return Ok(ApiResponseDto<object>.Ok(null, "User is now watching this task"));
         }
@@ -66,6 +72,10 @@ public class TaskWatcherController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(ApiResponseDto<object>.Fail(ex.Message));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -82,6 +92,7 @@ public class TaskWatcherController : ControllerBase
     {
         try
         {
+            await EnsureTaskAccessAsync(taskId);
             var userId = GetCurrentUserId();
             await _watcherService.RemoveWatcherAsync(taskId, userId);
             return Ok(ApiResponseDto<object>.Ok(null, "You are no longer watching this task"));
@@ -89,6 +100,10 @@ public class TaskWatcherController : ControllerBase
         catch (KeyNotFoundException ex)
         {
             return NotFound(ApiResponseDto<object>.Fail(ex.Message));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -105,12 +120,17 @@ public class TaskWatcherController : ControllerBase
     {
         try
         {
+            await EnsureTaskAccessAsync(taskId);
             await _watcherService.RemoveWatcherAsync(taskId, userId);
             return Ok(ApiResponseDto<object>.Ok(null, "User is no longer watching this task"));
         }
         catch (KeyNotFoundException ex)
         {
             return NotFound(ApiResponseDto<object>.Fail(ex.Message));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -127,12 +147,17 @@ public class TaskWatcherController : ControllerBase
     {
         try
         {
+            await EnsureTaskAccessAsync(taskId);
             var watchers = await _watcherService.GetTaskWatchersAsync(taskId);
             return Ok(ApiResponseDto<object>.Ok(watchers, "Task watchers retrieved successfully"));
         }
         catch (KeyNotFoundException ex)
         {
             return NotFound(ApiResponseDto<object>.Fail(ex.Message));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -168,9 +193,14 @@ public class TaskWatcherController : ControllerBase
     {
         try
         {
+            await EnsureTaskAccessAsync(taskId);
             var userId = GetCurrentUserId();
             var isWatching = await _watcherService.IsWatchingAsync(taskId, userId);
             return Ok(ApiResponseDto<object>.Ok(new { IsWatching = isWatching }, "Watcher status retrieved"));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -178,9 +208,33 @@ public class TaskWatcherController : ControllerBase
         }
     }
 
+    private bool HasElevatedAccess()
+    {
+        return User.IsInRole("Admin") || User.IsInRole("Manager");
+    }
+
     private Guid GetCurrentUserId()
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-        return Guid.Parse(userIdClaim?.Value ?? throw new UnauthorizedAccessException("User ID not found in token"));
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(userIdClaim, out var userId))
+            throw new UnauthorizedAccessException("Invalid user context");
+
+        return userId;
+    }
+
+    private async Task<Backend.Models.Entities.TaskItem> EnsureTaskAccessAsync(Guid taskId)
+    {
+        var task = await _taskService.GetById(taskId);
+
+        if (HasElevatedAccess())
+            return task;
+
+        var currentUserId = GetCurrentUserId();
+
+        if (task.AssignedUserId != currentUserId)
+            throw new UnauthorizedAccessException("You can only access your own tasks");
+
+        return task;
     }
 }

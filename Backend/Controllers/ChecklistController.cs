@@ -24,7 +24,7 @@ public class ChecklistController : ControllerBase
     /// Add a checklist item to a task
     /// </summary>
     [HttpPost]
-    [Authorize(Policy = "TaskRead")]
+    [Authorize(Policy = "TaskWrite")]
     public async Task<IActionResult> AddChecklistItem(Guid taskId, [FromBody] CreateChecklistItemDto dto)
     {
         try
@@ -81,7 +81,7 @@ public class ChecklistController : ControllerBase
     /// Update a checklist item
     /// </summary>
     [HttpPut("{checklistItemId}")]
-    [Authorize(Policy = "TaskRead")]
+    [Authorize(Policy = "TaskWrite")]
     public async Task<IActionResult> UpdateChecklistItem(Guid taskId, Guid checklistItemId, [FromBody] UpdateChecklistItemDto dto)
     {
         try
@@ -100,7 +100,7 @@ public class ChecklistController : ControllerBase
     /// Toggle completion status of a checklist item
     /// </summary>
     [HttpPatch("{checklistItemId}/toggle")]
-    [Authorize(Policy = "TaskRead")]
+    [Authorize(Policy = "TaskWrite")]
     public async Task<IActionResult> ToggleCompletion(Guid taskId, Guid checklistItemId)
     {
         try
@@ -119,7 +119,7 @@ public class ChecklistController : ControllerBase
     /// Delete a checklist item
     /// </summary>
     [HttpDelete("{checklistItemId}")]
-    [Authorize(Policy = "TaskRead")]
+    [Authorize(Policy = "TaskWrite")]
     public async Task<IActionResult> DeleteChecklistItem(Guid taskId, Guid checklistItemId)
     {
         try
@@ -138,7 +138,7 @@ public class ChecklistController : ControllerBase
     /// Reorder checklist items
     /// </summary>
     [HttpPost("reorder")]
-    [Authorize(Policy = "TaskRead")]
+    [Authorize(Policy = "TaskWrite")]
     public async Task<IActionResult> ReorderChecklist(Guid taskId, [FromBody] List<Guid> itemIds)
     {
         try
