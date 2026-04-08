@@ -71,6 +71,15 @@ public class TaskService : ITaskService
         if (query.AssignedTo.HasValue)
             taskQuery = taskQuery.Where(x => x.AssignedUserId == query.AssignedTo);
 
+        // Apply search filter for title and description
+        if (!string.IsNullOrEmpty(query.SearchText))
+        {
+            var searchTerm = query.SearchText.ToLower();
+            taskQuery = taskQuery.Where(x =>
+                x.Title.ToLower().Contains(searchTerm) ||
+                x.Description.ToLower().Contains(searchTerm));
+        }
+
         // Apply sorting
         taskQuery = query.SortBy?.ToLower() switch
         {

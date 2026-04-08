@@ -25,4 +25,5 @@ public class TaskQueryDto
     public Guid? AssignedTo { get; set; }
     public string? SortBy { get; set; } // createdAt, dueDate, priority, title
     public bool SortDescending { get; set; } = false;
+    public string? SearchText { get; set; } // Search by title and description
 }

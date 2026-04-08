@@ -319,8 +319,8 @@ These 3:
 
 - [x] Add paging to `GET /tasks`
 - [x] Add sorting by due date, priority, and created date
-- [ ] Add search by title and description
-- [ ] Keep filtering + pagination together
+- [x] Add search by title and description
+- [x] Keep filtering + pagination together
 
 ## 5) More Workflow Depth
 
@@ -330,10 +330,10 @@ These 3:
 
 ## 6) Labels, Attachments, Watchers, Notifications
 
-- [ ] Add labels/tags
-- [ ] Add file attachments
-- [ ] Add watchers / @mentions
-- [ ] Add email / Slack / Teams notifications
+- [X] Add labels/tags
+- [X] Add file attachments
+- [X] Add watchers / @mentions
+- [X] Add email / Slack / Teams notifications
 
 ## 7) Bulk Actions
 

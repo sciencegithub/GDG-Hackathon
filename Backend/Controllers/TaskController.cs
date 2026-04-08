@@ -35,7 +35,8 @@ public class TaskController : ControllerBase
         [FromQuery] string? status = null,
         [FromQuery] Guid? assignedTo = null,
         [FromQuery] string? sortBy = null,
-        [FromQuery] bool sortDescending = false)
+        [FromQuery] bool sortDescending = false,
+        [FromQuery] string? search = null)
     {
         assignedTo = EnforceOwnershipFilter(assignedTo);
 
@@ -46,7 +47,8 @@ public class TaskController : ControllerBase
             Status = status,
             AssignedTo = assignedTo,
             SortBy = sortBy,
-            SortDescending = sortDescending
+            SortDescending = sortDescending,
+            SearchText = search
         };
 
         var result = await _service.GetAllPaginatedAsync(query);
