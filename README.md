@@ -152,7 +152,7 @@ Assign user with least tasks
 - [x] Validation
 - [x] Exception middleware
 - [x] CORS
-- [ ] Logging (basic is enough)
+- [x] Logging (basic is enough)
 
 ## ⚡ Important
 
@@ -167,12 +167,12 @@ Assign user with least tasks
 - [x] GET `/dashboard`
 - [x] Pagination + filtering
 - [ ] API versioning `/api/v1`
-- [ ] Seeding
+- [x] Rate limiting
+- [x] Redis caching
+- [x] Seeding
 
 ## 🔥 Bonus
 
-- [ ] Redis caching
-- [ ] Rate limiting
 
 ---
 
@@ -181,11 +181,11 @@ Assign user with least tasks
 Add:
 
 - [x] Authentication (JWT)
-- [ ] Authorization (roles + ownership)
-  - [ ] Role-based access
-  - [ ] Resource ownership
+- [x] Authorization (roles + ownership)
+  - [x] Role-based access
+  - [x] Resource ownership
 - [x] Validation (FluentValidation)
-- [ ] Logging (Serilog or basic)
+- [x] Logging (Serilog or basic)
 - [x] CORS
 - [x] Exception middleware
 
@@ -202,7 +202,7 @@ GET    /activity
 # ⚔️ Team Split (FIXED)
 
 - [x] Pagination + filtering (`?status=todo&assignedTo=5&page=1&pageSize=10`)
-- [ ] Seeding (test data)
+- [x] Seeding (test data)
 - [ ] API versioning (`/api/v1`)
 - [x] Rate limiting
 - [x] Soft delete
@@ -231,9 +231,9 @@ GET    /activity
 
 If you complete:
 
-- [ ] Authorization (roles + ownership)
-  - [ ] Role-based access
-  - [ ] Resource ownership
+- [x] Authorization (roles + ownership)
+  - [x] Role-based access
+  - [x] Resource ownership
 - [ ] Refresh token system
 - [x] Exception middleware (global)
   - [x] Standard API response format
@@ -249,7 +249,7 @@ If you complete:
   - [ ] Deterministic API shape
 - [ ] SignalR integration
 - [ ] Activity log system
-- [ ] Logging (Serilog)
+- [x] Logging (Serilog)
 - [x] Testing (xUnit)
 
 ### 🧑‍💻 Teammate (Easy / Safe / Visible)
@@ -273,7 +273,7 @@ If you complete:
 - [ ] Backend → Render
 - [ ] DB → PostgreSQL
 - [ ] Basic env setup
-- [ ] Seeding (5 users / 20 tasks / 2 projects)
+- [x] Seeding (5 users / 20 tasks / 2 projects)
 - [ ] Basic notifications
 - [x] Priority field
 
@@ -312,7 +312,7 @@ These 3:
 
 - [x] Add roles: Admin / Manager / User / Viewer
 - [x] Add permission matrix per endpoint/action
-- [ ] Add project-level access control
+- [x] Add project-level access control
 - [x] Use `[Authorize(Roles=...)]` where needed
 
 ## 4) Pagination + Sorting + Search
@@ -330,9 +330,10 @@ These 3:
 
 ## 6) Labels, Attachments, Watchers, Notifications
 
-- [ ] Add labels/tags
-- [ ] Add file attachments
-- [ ] Add watchers / @mentions
+- [x] Add labels/tags
+- [x] Add file attachments
+- [x] Add watchers
+- [ ] Add @mentions
 - [ ] Add email / Slack / Teams notifications
 
 ## 7) Bulk Actions
@@ -351,7 +352,7 @@ These 3:
 
 # 🐳 Run With Docker
 
-This project uses Docker Compose from the Backend folder. It starts the API and a PostgreSQL container together.
+This project uses Docker Compose from the Backend folder. It starts the API, PostgreSQL, and Redis together.
 
 ### 1. Go to the backend folder
 
@@ -367,6 +368,7 @@ The backend expects these values in `Backend/.env`:
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
 - `CONNECTION_STRING`
+- `REDIS_CONNECTION_STRING` (optional outside Docker Compose)
 
 ### 3. Start the containers
 
