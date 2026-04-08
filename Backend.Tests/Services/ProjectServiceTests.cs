@@ -36,10 +36,16 @@ public class ProjectServiceTests
 
         var persisted = await context.Projects.SingleAsync(x => x.Id == project.Id);
         Assert.Equal(ownerUserId, persisted.OwnerUserId);
+
+        var ownerMembership = await context.ProjectMembers
+            .SingleOrDefaultAsync(pm => pm.ProjectId == project.Id && pm.UserId == ownerUserId);
+
+        Assert.NotNull(ownerMembership);
+        Assert.Equal("Admin", ownerMembership!.Role);
     }
 
     [Fact]
-    public async Task GetAccessibleProjects_ForRegularUser_ReturnsOwnedAndAssignedProjects()
+    public async Task GetAccessibleProjects_ForRegularUser_ReturnsOnlyOwnedOrMemberProjects()
     {
         await using var context = CreateContext();
 
@@ -58,11 +64,11 @@ public class ProjectServiceTests
             OwnerUserId = currentUserId
         };
 
-        var assignedProject = new Project
+        var memberProject = new Project
         {
             Id = Guid.NewGuid(),
-            Name = "Assigned",
-            Description = "Assigned task project",
+            Name = "Member",
+            Description = "Member project",
             OwnerUserId = otherUserId
         };
 
@@ -74,18 +80,15 @@ public class ProjectServiceTests
             OwnerUserId = otherUserId
         };
 
-        context.Projects.AddRange(ownedProject, assignedProject, hiddenProject);
+        context.Projects.AddRange(ownedProject, memberProject, hiddenProject);
 
-        context.Tasks.Add(new TaskItem
+        context.ProjectMembers.Add(new ProjectMember
         {
-            Id = Guid.NewGuid(),
-            Title = "Assigned Task",
-            Description = "Task assigned to current user",
-            Status = "Todo",
-            Priority = "Medium",
-            ProjectId = assignedProject.Id,
-            AssignedUserId = currentUserId,
-            CreatedAt = DateTime.UtcNow
+            ProjectId = memberProject.Id,
+            UserId = currentUserId,
+            Role = "Member",
+            AddedByUserId = otherUserId,
+            AddedAt = DateTime.UtcNow
         });
 
         await context.SaveChangesAsync();
@@ -95,8 +98,50 @@ public class ProjectServiceTests
 
         Assert.Equal(2, result.Count);
         Assert.Contains(result, p => p.Id == ownedProject.Id);
-        Assert.Contains(result, p => p.Id == assignedProject.Id);
+        Assert.Contains(result, p => p.Id == memberProject.Id);
         Assert.DoesNotContain(result, p => p.Id == hiddenProject.Id);
+    }
+
+    [Fact]
+    public async Task GetAccessibleProjects_ForRegularUser_DoesNotIncludeAssignedTaskOnlyProjects()
+    {
+        await using var context = CreateContext();
+
+        var currentUserId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+
+        context.Users.AddRange(
+            new User { Id = currentUserId, Name = "Current", Email = "current@example.com", PasswordHash = "hash", Role = "User" },
+            new User { Id = otherUserId, Name = "Other", Email = "other@example.com", PasswordHash = "hash", Role = "User" });
+
+        var assignedOnlyProject = new Project
+        {
+            Id = Guid.NewGuid(),
+            Name = "Assigned Only",
+            Description = "User has task assignment but no membership",
+            OwnerUserId = otherUserId
+        };
+
+        context.Projects.Add(assignedOnlyProject);
+
+        context.Tasks.Add(new TaskItem
+        {
+            Id = Guid.NewGuid(),
+            Title = "Assigned Task",
+            Description = "Task assigned to current user",
+            Status = "Todo",
+            Priority = "Medium",
+            ProjectId = assignedOnlyProject.Id,
+            AssignedUserId = currentUserId,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await context.SaveChangesAsync();
+
+        var service = new ProjectService(context);
+        var result = await service.GetAccessibleProjects(currentUserId, elevatedAccess: false);
+
+        Assert.DoesNotContain(result, p => p.Id == assignedOnlyProject.Id);
     }
 
     [Fact]
@@ -160,6 +205,138 @@ public class ProjectServiceTests
         var canRead = await service.HasReadAccess(project.Id, Guid.NewGuid(), elevatedAccess: true);
 
         Assert.True(canRead);
+    }
+
+    [Fact]
+    public async Task GetAccessibleProjects_ForRegularUser_IncludesMemberProjects()
+    {
+        await using var context = CreateContext();
+
+        var currentUserId = Guid.NewGuid();
+        var ownerUserId = Guid.NewGuid();
+
+        context.Users.AddRange(
+            new User { Id = currentUserId, Name = "Current", Email = "current@example.com", PasswordHash = "hash", Role = "User" },
+            new User { Id = ownerUserId, Name = "Owner", Email = "owner@example.com", PasswordHash = "hash", Role = "User" });
+
+        var memberProject = new Project
+        {
+            Id = Guid.NewGuid(),
+            Name = "Member Project",
+            Description = "Project where current user is member",
+            OwnerUserId = ownerUserId
+        };
+
+        context.Projects.Add(memberProject);
+        context.ProjectMembers.Add(new ProjectMember
+        {
+            ProjectId = memberProject.Id,
+            UserId = currentUserId,
+            Role = "Member",
+            AddedByUserId = ownerUserId,
+            AddedAt = DateTime.UtcNow
+        });
+
+        await context.SaveChangesAsync();
+
+        var service = new ProjectService(context);
+        var result = await service.GetAccessibleProjects(currentUserId, elevatedAccess: false);
+
+        Assert.Contains(result, p => p.Id == memberProject.Id);
+    }
+
+    [Fact]
+    public async Task AddMember_AddsExistingUserToProject()
+    {
+        await using var context = CreateContext();
+
+        var ownerUserId = Guid.NewGuid();
+        var newMemberUserId = Guid.NewGuid();
+
+        context.Users.AddRange(
+            new User { Id = ownerUserId, Name = "Owner", Email = "owner@example.com", PasswordHash = "hash", Role = "User" },
+            new User { Id = newMemberUserId, Name = "Teammate", Email = "teammate@example.com", PasswordHash = "hash", Role = "User" });
+
+        var project = new Project
+        {
+            Id = Guid.NewGuid(),
+            Name = "Collab Project",
+            Description = "Project",
+            OwnerUserId = ownerUserId
+        };
+
+        context.Projects.Add(project);
+        context.ProjectMembers.Add(new ProjectMember
+        {
+            ProjectId = project.Id,
+            UserId = ownerUserId,
+            Role = "Admin",
+            AddedByUserId = ownerUserId,
+            AddedAt = DateTime.UtcNow
+        });
+
+        await context.SaveChangesAsync();
+
+        var service = new ProjectService(context);
+
+        var member = await service.AddMember(project.Id, new AddProjectMemberDto
+        {
+            UserId = newMemberUserId,
+            Role = "Member"
+        }, ownerUserId);
+
+        Assert.Equal(newMemberUserId, member.UserId);
+        Assert.Equal("Member", member.Role);
+
+        var persisted = await context.ProjectMembers
+            .SingleOrDefaultAsync(pm => pm.ProjectId == project.Id && pm.UserId == newMemberUserId);
+
+        Assert.NotNull(persisted);
+    }
+
+    [Fact]
+    public async Task CreateInvitation_CreatesPendingInvitationRecord()
+    {
+        await using var context = CreateContext();
+
+        var ownerUserId = Guid.NewGuid();
+
+        context.Users.Add(new User
+        {
+            Id = ownerUserId,
+            Name = "Owner",
+            Email = "owner@example.com",
+            PasswordHash = "hash",
+            Role = "User"
+        });
+
+        var project = new Project
+        {
+            Id = Guid.NewGuid(),
+            Name = "Invites",
+            Description = "Invitation tests",
+            OwnerUserId = ownerUserId
+        };
+
+        context.Projects.Add(project);
+        await context.SaveChangesAsync();
+
+        var service = new ProjectService(context);
+
+        var invitation = await service.CreateInvitation(project.Id, new CreateProjectInvitationDto
+        {
+            Email = "invitee@example.com",
+            Role = "Member",
+            ExpiresInDays = 7
+        }, ownerUserId);
+
+        Assert.Equal("invitee@example.com", invitation.Email);
+        Assert.Equal("Pending", invitation.Status);
+
+        var persisted = await context.ProjectInvitations
+            .SingleOrDefaultAsync(pi => pi.ProjectId == project.Id && pi.Email == "invitee@example.com");
+
+        Assert.NotNull(persisted);
     }
 
     private static AppDbContext CreateContext()
