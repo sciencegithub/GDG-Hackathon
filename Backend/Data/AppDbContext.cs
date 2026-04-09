@@ -69,7 +69,15 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<ProjectInvitation>()
             .HasIndex(pi => new { pi.ProjectId, pi.Email, pi.Status });
 
-        modelBuilder.Entity<TaskItem>().HasQueryFilter(task => !task.IsDeleted);
+        var taskEntity = modelBuilder.Entity<TaskItem>();
+        taskEntity.HasQueryFilter(task => !task.IsDeleted);
+        taskEntity.Property(task => task.RowVersion)
+            .IsConcurrencyToken()
+            .HasDefaultValue(1L);
+        taskEntity.HasIndex(task => task.Status);
+        taskEntity.HasIndex(task => task.AssignedUserId);
+        taskEntity.HasIndex(task => task.ProjectId);
+
         modelBuilder.Entity<TaskComment>().HasQueryFilter(comment => !comment.IsDeleted);
         modelBuilder.Entity<ChecklistItem>().HasQueryFilter(item => !item.IsDeleted);
 
@@ -167,5 +175,36 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(n => n.TaskId)
             .OnDelete(DeleteBehavior.SetNull);
+    }
+
+    public override int SaveChanges()
+    {
+        ApplyTaskRowVersionUpdates();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ApplyTaskRowVersionUpdates();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ApplyTaskRowVersionUpdates()
+    {
+        foreach (var entry in ChangeTracker.Entries<TaskItem>())
+        {
+            if (entry.State == EntityState.Added && entry.Entity.RowVersion <= 0)
+            {
+                entry.Property(task => task.RowVersion).CurrentValue = 1;
+                continue;
+            }
+
+            if (entry.State != EntityState.Modified)
+                continue;
+
+            var rowVersionProperty = entry.Property(task => task.RowVersion);
+            var nextRowVersion = Math.Max(1, rowVersionProperty.OriginalValue) + 1;
+            rowVersionProperty.CurrentValue = nextRowVersion;
+        }
     }
 }

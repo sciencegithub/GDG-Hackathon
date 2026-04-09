@@ -8,4 +8,11 @@ public interface IEmailService
         string inviterName,
         string role,
         DateTime expiresAt);
+
+    Task SendTaskMentionEmail(
+        string recipientEmail,
+        string recipientName,
+        string commenterName,
+        string taskTitle,
+        string commentContent);
 }

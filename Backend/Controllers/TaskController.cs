@@ -8,6 +8,8 @@ using Backend.Models.Entities;
 using System.Security.Claims;
 
 [ApiController]
+[Asp.Versioning.ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/tasks")]
 [Route("api/tasks")]
 [Authorize]
 public class TaskController : ControllerBase
@@ -108,7 +110,7 @@ public class TaskController : ControllerBase
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateTaskStatusDto dto)
     {
         await EnsureTaskWriteAccessAsync(id);
-        var task = await _service.UpdateStatus(id, dto.Status, GetCurrentUserId());
+        var task = await _service.UpdateStatus(id, dto.Status, GetCurrentUserId(), dto.RowVersion);
         return Ok(ApiResponseDto<Backend.Models.Entities.TaskItem>.Ok(task, "Task status updated"));
     }
 
@@ -117,7 +119,7 @@ public class TaskController : ControllerBase
     public async Task<IActionResult> Assign(Guid id, [FromBody] AssignTaskDto dto)
     {
         await EnsureTaskWriteAccessAsync(id);
-        var task = await _service.Assign(id, dto.UserId, GetCurrentUserId());
+        var task = await _service.Assign(id, dto.UserId, GetCurrentUserId(), dto.RowVersion);
         return Ok(ApiResponseDto<Backend.Models.Entities.TaskItem>.Ok(task, "Task assigned"));
     }
 
@@ -128,24 +130,6 @@ public class TaskController : ControllerBase
         await EnsureTaskReadAccessAsync(id);
         var activity = await _service.GetActivity(id);
         return Ok(ApiResponseDto<List<TaskActivity>>.Ok(activity, "Task activity retrieved"));
-    }
-
-    [HttpGet("{id}/checklist")]
-    [Authorize(Policy = "TaskRead")]
-    public async Task<IActionResult> GetChecklist(Guid id)
-    {
-        await EnsureTaskReadAccessAsync(id);
-        var items = await _service.GetChecklistItems(id);
-        return Ok(ApiResponseDto<List<ChecklistItem>>.Ok(items, "Task checklist retrieved"));
-    }
-
-    [HttpPost("{id}/checklist")]
-    [Authorize(Policy = "TaskWrite")]
-    public async Task<IActionResult> AddChecklistItem(Guid id, [FromBody] CreateChecklistItemDto dto)
-    {
-        await EnsureTaskWriteAccessAsync(id);
-        var item = await _service.AddChecklistItem(id, dto);
-        return Ok(ApiResponseDto<ChecklistItem>.Ok(item, "Checklist item added"));
     }
 
     [HttpPatch("{id}/checklist/{checklistItemId}")]

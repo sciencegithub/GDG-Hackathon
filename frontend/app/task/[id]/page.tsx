@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -23,6 +23,9 @@ import {
   addTaskChecklistItem,
   addTaskComment,
   assignTask,
+  deleteTaskAttachment,
+  downloadTaskAttachment,
+  getTaskAttachments,
   getTaskActivity,
   getTaskById,
   getTaskChecklist,
@@ -32,15 +35,32 @@ import {
   toggleTaskChecklistItem,
   updateTask,
   updateTaskStatus,
+  uploadTaskAttachment,
 } from "@/services/task";
+import { useAuthStore } from "@/store/authStore";
 import { getUsers } from "@/services/user";
-import type { TaskPriority, UpdateTaskInput } from "@/types/task";
+import { getProjectMembers } from "@/services/project";
+import type { TaskAttachment, TaskPriority, UpdateTaskInput } from "@/types/task";
 
 type Suggestion = {
   userId: string;
   userName: string;
   priority: TaskPriority;
   explanation: string;
+};
+
+type MentionSuggestion = {
+  userId: string;
+  name: string;
+  email: string;
+  emailLocalPart: string;
+  handle: string;
+};
+
+type MentionContext = {
+  start: number;
+  end: number;
+  query: string;
 };
 
 function getErrorMessage(error: unknown, fallback = "Something went wrong") {
@@ -74,6 +94,22 @@ function formatDate(value?: string | null) {
   }).format(date);
 }
 
+function formatFileSize(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return "-";
+  }
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 function computeSuggestedPriority(dueDate?: string | null): TaskPriority {
   if (!dueDate) {
     return "Medium";
@@ -97,18 +133,61 @@ function computeSuggestedPriority(dueDate?: string | null): TaskPriority {
   return "Low";
 }
 
+function extractMentionContext(comment: string, caretPosition: number | null): MentionContext | null {
+  if (caretPosition === null || caretPosition < 0) {
+    return null;
+  }
+
+  const beforeCaret = comment.slice(0, caretPosition);
+  const match = beforeCaret.match(/(?:^|\s)@([A-Za-z0-9._-]{0,64})$/);
+  if (!match) {
+    return null;
+  }
+
+  const atIndex = beforeCaret.lastIndexOf("@");
+  if (atIndex < 0) {
+    return null;
+  }
+
+  return {
+    start: atIndex,
+    end: caretPosition,
+    query: match[1] ?? "",
+  };
+}
+
+function normalizeHandle(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function buildPreferredHandle(name: string, emailLocalPart: string) {
+  const fromName = normalizeHandle(name);
+  if (fromName.length >= 2) {
+    return fromName;
+  }
+
+  return normalizeHandle(emailLocalPart);
+}
+
 export default function TaskDetailsPage() {
   const params = useParams<{ id: string }>();
   const taskId = String(params.id ?? "");
   const queryClient = useQueryClient();
+  const currentUserId = useAuthStore((state) => state.user?.id ?? null);
 
   const [titleDraft, setTitleDraft] = useState("");
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [dueDateDraft, setDueDateDraft] = useState("");
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [newComment, setNewComment] = useState("");
+  const [commentCursorPosition, setCommentCursorPosition] = useState<number | null>(null);
+  const [isMentionMenuOpen, setIsMentionMenuOpen] = useState(false);
+  const [activeMentionIndex, setActiveMentionIndex] = useState(0);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
+
+  const commentInputRef = useRef<HTMLInputElement>(null);
 
   const taskQuery = useQuery({
     queryKey: ["task", taskId],
@@ -140,9 +219,22 @@ export default function TaskDetailsPage() {
     enabled: Boolean(taskId),
   });
 
+  const attachmentsQuery = useQuery({
+    queryKey: ["task-attachments", taskId],
+    queryFn: () => getTaskAttachments(taskId),
+    enabled: Boolean(taskId),
+  });
+
   const usersQuery = useQuery({
     queryKey: ["users", "task-detail"],
     queryFn: () => getUsers(),
+    retry: false,
+  });
+
+  const projectMembersQuery = useQuery({
+    queryKey: ["project-members", taskQuery.data?.projectId],
+    queryFn: () => getProjectMembers(taskQuery.data!.projectId),
+    enabled: Boolean(taskQuery.data?.projectId),
     retry: false,
   });
 
@@ -174,6 +266,7 @@ export default function TaskDetailsPage() {
       queryClient.invalidateQueries({ queryKey: ["task-checklist", taskId] }),
       queryClient.invalidateQueries({ queryKey: ["task-checklist-summary", taskId] }),
       queryClient.invalidateQueries({ queryKey: ["task-activity", taskId] }),
+      queryClient.invalidateQueries({ queryKey: ["task-attachments", taskId] }),
       queryClient.invalidateQueries({ queryKey: ["tasks"] }),
     ]);
   };
@@ -190,7 +283,8 @@ export default function TaskDetailsPage() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({ status }: { status: string }) => updateTaskStatus(taskId, status),
+    mutationFn: ({ status, rowVersion }: { status: string; rowVersion?: number }) =>
+      updateTaskStatus(taskId, status, rowVersion),
     onSuccess: async () => {
       toast.success("Status updated");
       await refreshTaskSections();
@@ -201,7 +295,8 @@ export default function TaskDetailsPage() {
   });
 
   const assignMutation = useMutation({
-    mutationFn: ({ userId }: { userId: string }) => assignTask(taskId, userId),
+    mutationFn: ({ userId, rowVersion }: { userId: string; rowVersion?: number }) =>
+      assignTask(taskId, userId, rowVersion),
     onSuccess: async () => {
       toast.success("Assignee updated");
       await refreshTaskSections();
@@ -246,6 +341,29 @@ export default function TaskDetailsPage() {
     },
   });
 
+  const uploadAttachmentMutation = useMutation({
+    mutationFn: ({ file }: { file: File }) => uploadTaskAttachment(taskId, file),
+    onSuccess: async () => {
+      toast.success("Attachment uploaded");
+      setAttachmentFile(null);
+      await refreshTaskSections();
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Could not upload attachment"));
+    },
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: ({ attachmentId }: { attachmentId: string }) => deleteTaskAttachment(taskId, attachmentId),
+    onSuccess: async () => {
+      toast.success("Attachment deleted");
+      await refreshTaskSections();
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Could not delete attachment"));
+    },
+  });
+
   const assigneeName = useMemo(() => {
     if (!taskQuery.data?.assignedUserId) {
       return "Unassigned";
@@ -254,6 +372,146 @@ export default function TaskDetailsPage() {
     const users = usersQuery.data ?? [];
     return users.find((user) => user.id === taskQuery.data?.assignedUserId)?.name ?? "Assigned";
   }, [taskQuery.data?.assignedUserId, usersQuery.data]);
+
+  const mentionCandidates = useMemo<MentionSuggestion[]>(() => {
+    const projectMembers = projectMembersQuery.data;
+
+    if (projectMembers && projectMembers.length > 0) {
+      return projectMembers
+        .map((member) => {
+          const emailLocalPart = member.email.split("@")[0] ?? "";
+          return {
+            userId: member.userId,
+            name: member.name,
+            email: member.email,
+            emailLocalPart,
+            handle: buildPreferredHandle(member.name, emailLocalPart),
+          };
+        })
+        .filter((member) => member.handle.length >= 2)
+        .sort((left, right) => left.name.localeCompare(right.name));
+    }
+
+    return (usersQuery.data ?? [])
+      .map((user) => {
+        const emailLocalPart = user.email.split("@")[0] ?? "";
+        return {
+          userId: user.id,
+          name: user.name,
+          email: user.email,
+          emailLocalPart,
+          handle: buildPreferredHandle(user.name, emailLocalPart),
+        };
+      })
+      .filter((member) => member.handle.length >= 2)
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [projectMembersQuery.data, usersQuery.data]);
+
+  const mentionContext = useMemo(
+    () => extractMentionContext(newComment, commentCursorPosition),
+    [newComment, commentCursorPosition],
+  );
+
+  const mentionSuggestions = useMemo(() => {
+    if (!mentionContext) {
+      return [];
+    }
+
+    const normalizedQuery = mentionContext.query.trim().toLowerCase();
+
+    return mentionCandidates
+      .filter((candidate) => {
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        return (
+          candidate.handle.includes(normalizedQuery) ||
+          candidate.emailLocalPart.toLowerCase().includes(normalizedQuery) ||
+          candidate.name.toLowerCase().includes(normalizedQuery)
+        );
+      })
+      .slice(0, 6);
+  }, [mentionCandidates, mentionContext]);
+
+  useEffect(() => {
+    if (!mentionContext || mentionSuggestions.length === 0) {
+      setIsMentionMenuOpen(false);
+      setActiveMentionIndex(0);
+      return;
+    }
+
+    setIsMentionMenuOpen(true);
+    setActiveMentionIndex((current) => Math.min(current, mentionSuggestions.length - 1));
+  }, [mentionContext, mentionSuggestions.length]);
+
+  const commitMentionSelection = (candidate: MentionSuggestion) => {
+    if (!mentionContext) {
+      return;
+    }
+
+    const before = newComment.slice(0, mentionContext.start);
+    const after = newComment.slice(mentionContext.end);
+    const mentionText = `@${candidate.handle}`;
+    const trailingSpace = after.length === 0 || after.startsWith(" ") ? "" : " ";
+    const nextComment = `${before}${mentionText}${trailingSpace}${after}`;
+    const nextCursor = (before + mentionText + trailingSpace).length;
+
+    setNewComment(nextComment);
+    setCommentCursorPosition(nextCursor);
+    setIsMentionMenuOpen(false);
+    setActiveMentionIndex(0);
+
+    requestAnimationFrame(() => {
+      if (!commentInputRef.current) {
+        return;
+      }
+
+      commentInputRef.current.focus();
+      commentInputRef.current.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const handleCommentInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!isMentionMenuOpen || mentionSuggestions.length === 0) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveMentionIndex((index) => (index + 1) % mentionSuggestions.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveMentionIndex((index) => (index - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      commitMentionSelection(mentionSuggestions[activeMentionIndex] ?? mentionSuggestions[0]);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsMentionMenuOpen(false);
+    }
+  };
+
+  const syncCommentCursorPosition = () => {
+    setCommentCursorPosition(commentInputRef.current?.selectionStart ?? null);
+  };
+
+  const handleDownloadAttachment = async (attachment: TaskAttachment) => {
+    try {
+      await downloadTaskAttachment(taskId, attachment.id, attachment.fileName);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Could not download attachment"));
+    }
+  };
 
   const handleSaveTaskInfo = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -270,6 +528,7 @@ export default function TaskDetailsPage() {
         priority: taskQuery.data.priority,
         assignedUserId: taskQuery.data.assignedUserId ?? null,
         dueDate: dueDateDraft ? new Date(dueDateDraft).toISOString() : null,
+        rowVersion: taskQuery.data.rowVersion,
       },
     });
   };
@@ -335,6 +594,7 @@ export default function TaskDetailsPage() {
         priority: suggestion.priority,
         assignedUserId: suggestion.userId,
         dueDate: dueDateDraft ? new Date(dueDateDraft).toISOString() : null,
+        rowVersion: taskQuery.data.rowVersion,
       },
     });
 
@@ -342,7 +602,50 @@ export default function TaskDetailsPage() {
   };
 
   if (taskQuery.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading task details...</p>;
+    return (
+      <div className="space-y-6">
+        <Card className="animate-pulse">
+          <CardHeader className="space-y-3">
+            <div className="h-7 w-56 rounded bg-muted" />
+            <div className="h-4 w-3/4 rounded bg-muted" />
+          </CardHeader>
+          <CardContent className="grid gap-4 pb-6 lg:grid-cols-2">
+            <div className="h-10 rounded bg-muted lg:col-span-2" />
+            <div className="h-10 rounded bg-muted lg:col-span-2" />
+            <div className="h-10 rounded bg-muted" />
+            <div className="h-10 rounded bg-muted" />
+            <div className="h-10 rounded bg-muted" />
+            <div className="h-10 rounded bg-muted" />
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Card className="animate-pulse">
+            <CardHeader className="space-y-3">
+              <div className="h-6 w-32 rounded bg-muted" />
+              <div className="h-4 w-2/3 rounded bg-muted" />
+            </CardHeader>
+            <CardContent className="space-y-3 pb-6">
+              <div className="h-10 rounded bg-muted" />
+              <div className="h-14 rounded bg-muted" />
+              <div className="h-14 rounded bg-muted" />
+            </CardContent>
+          </Card>
+
+          <Card className="animate-pulse">
+            <CardHeader className="space-y-3">
+              <div className="h-6 w-32 rounded bg-muted" />
+              <div className="h-4 w-2/3 rounded bg-muted" />
+            </CardHeader>
+            <CardContent className="space-y-3 pb-6">
+              <div className="h-10 rounded bg-muted" />
+              <div className="h-16 rounded bg-muted" />
+              <div className="h-16 rounded bg-muted" />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   if (taskQuery.isError || !taskQuery.data) {
@@ -353,6 +656,7 @@ export default function TaskDetailsPage() {
   const checklistItems = checklistQuery.data ?? [];
   const checklistSummary = checklistSummaryQuery.data;
   const comments = commentsQuery.data ?? [];
+  const attachments = attachmentsQuery.data ?? [];
   const activities = activityQuery.data ?? [];
 
   return (
@@ -394,7 +698,12 @@ export default function TaskDetailsPage() {
               <select
                 className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                 value={task.status}
-                onChange={(event) => updateStatusMutation.mutate({ status: event.target.value })}
+                onChange={(event) =>
+                  updateStatusMutation.mutate({
+                    status: event.target.value,
+                    rowVersion: task.rowVersion,
+                  })
+                }
               >
                 <option value="Todo">Todo</option>
                 <option value="In Progress">In Progress</option>
@@ -416,6 +725,7 @@ export default function TaskDetailsPage() {
                       priority: event.target.value,
                       assignedUserId: task.assignedUserId ?? null,
                       dueDate: dueDateDraft ? new Date(dueDateDraft).toISOString() : null,
+                      rowVersion: task.rowVersion,
                     },
                   });
                 }}
@@ -446,7 +756,7 @@ export default function TaskDetailsPage() {
                   if (!nextUserId) {
                     return;
                   }
-                  assignMutation.mutate({ userId: nextUserId });
+                  assignMutation.mutate({ userId: nextUserId, rowVersion: task.rowVersion });
                 }}
                 disabled={usersQuery.isError}
               >
@@ -570,24 +880,65 @@ export default function TaskDetailsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Comments</CardTitle>
-            <CardDescription>Discuss task updates with your team.</CardDescription>
+            <CardDescription>Discuss task updates with your team. Use @name to mention project members.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 pb-6">
             <form
               className="flex gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
+                if (isMentionMenuOpen && mentionSuggestions.length > 0) {
+                  commitMentionSelection(mentionSuggestions[activeMentionIndex] ?? mentionSuggestions[0]);
+                  return;
+                }
+
                 if (!newComment.trim()) {
                   return;
                 }
                 addCommentMutation.mutate({ content: newComment.trim() });
               }}
             >
-              <Input
-                value={newComment}
-                onChange={(event) => setNewComment(event.target.value)}
-                placeholder="Add a comment"
-              />
+              <div className="relative flex-1">
+                <Input
+                  ref={commentInputRef}
+                  value={newComment}
+                  onChange={(event) => {
+                    setNewComment(event.target.value);
+                    setCommentCursorPosition(event.target.selectionStart);
+                  }}
+                  onKeyDown={handleCommentInputKeyDown}
+                  onKeyUp={syncCommentCursorPosition}
+                  onClick={syncCommentCursorPosition}
+                  onFocus={syncCommentCursorPosition}
+                  onBlur={() => {
+                    window.setTimeout(() => {
+                      setIsMentionMenuOpen(false);
+                    }, 120);
+                  }}
+                  placeholder="Add a comment (e.g., @alex please review)"
+                />
+
+                {isMentionMenuOpen && mentionSuggestions.length > 0 ? (
+                  <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-md">
+                    {mentionSuggestions.map((candidate, index) => (
+                      <button
+                        key={candidate.userId}
+                        type="button"
+                        className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm ${
+                          index === activeMentionIndex ? "bg-accent text-accent-foreground" : "hover:bg-accent/70"
+                        }`}
+                        onMouseDown={(mouseEvent) => {
+                          mouseEvent.preventDefault();
+                          commitMentionSelection(candidate);
+                        }}
+                      >
+                        <span className="font-medium">{candidate.name}</span>
+                        <span className="text-xs text-muted-foreground">@{candidate.handle}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <Button type="submit" isLoading={addCommentMutation.isPending}>Post</Button>
             </form>
 
@@ -607,6 +958,81 @@ export default function TaskDetailsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Attachments</CardTitle>
+          <CardDescription>Upload files and download task assets.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 pb-6">
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+
+              if (!attachmentFile) {
+                toast.error("Please choose a file first");
+                return;
+              }
+
+              uploadAttachmentMutation.mutate({ file: attachmentFile });
+            }}
+          >
+            <div className="min-w-[220px] flex-1 space-y-1.5">
+              <Label htmlFor="task-attachment-file">Choose file</Label>
+              <Input
+                id="task-attachment-file"
+                type="file"
+                onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+              />
+            </div>
+            <Button type="submit" isLoading={uploadAttachmentMutation.isPending}>
+              Upload file
+            </Button>
+          </form>
+
+          {attachmentsQuery.isError ? (
+            <p className="text-sm text-destructive">{getErrorMessage(attachmentsQuery.error)}</p>
+          ) : null}
+
+          {attachmentsQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading attachments...</p> : null}
+
+          {!attachmentsQuery.isLoading && attachments.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No attachments yet.</p>
+          ) : null}
+
+          {!attachmentsQuery.isLoading && attachments.length > 0 ? (
+            attachments.map((attachment) => (
+              <div key={attachment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">{attachment.fileName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatFileSize(attachment.fileSizeBytes)} · uploaded by {attachment.uploadedByUserName} · {formatDate(attachment.uploadedAt)}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => void handleDownloadAttachment(attachment)}>
+                    Download
+                  </Button>
+
+                  {currentUserId === attachment.uploadedByUserId ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      isLoading={deleteAttachmentMutation.isPending}
+                      onClick={() => deleteAttachmentMutation.mutate({ attachmentId: attachment.id })}
+                    >
+                      Delete
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

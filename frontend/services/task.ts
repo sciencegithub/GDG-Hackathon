@@ -5,6 +5,7 @@ import type {
   CreateTaskCommentInput,
   CreateTaskInput,
   TaskActivity,
+  TaskAttachment,
   TaskChecklistItem,
   TaskChecklistSummary,
   TaskComment,
@@ -46,20 +47,20 @@ export async function updateTask(taskId: string, payload: UpdateTaskInput) {
   return response.data;
 }
 
-export async function updateTaskStatus(taskId: string, status: string) {
+export async function updateTaskStatus(taskId: string, status: string, rowVersion?: number) {
   const response = await apiClient.patch<ApiResponse<TaskItem>>(
     `/api/tasks/${taskId}/status`,
-    { status },
+    rowVersion === undefined ? { status } : { status, rowVersion },
     { auth: true },
   );
 
   return response.data;
 }
 
-export async function assignTask(taskId: string, userId: string) {
+export async function assignTask(taskId: string, userId: string, rowVersion?: number) {
   const response = await apiClient.patch<ApiResponse<TaskItem>>(
     `/api/tasks/${taskId}/assign`,
-    { userId },
+    rowVersion === undefined ? { userId } : { userId, rowVersion },
     { auth: true },
   );
 
@@ -156,4 +157,44 @@ export async function deleteTaskComment(taskId: string, commentId: string) {
   await apiClient.delete<ApiResponse<object>>(`/api/tasks/${taskId}/comments/${commentId}`, {
     auth: true,
   });
+}
+
+export async function getTaskAttachments(taskId: string) {
+  const response = await apiClient.get<ApiResponse<TaskAttachment[]>>(`/api/tasks/${taskId}/attachments`, {
+    auth: true,
+  });
+
+  return response.data;
+}
+
+export async function uploadTaskAttachment(taskId: string, file: File) {
+  const payload = new FormData();
+  payload.append("file", file);
+
+  const response = await apiClient.post<ApiResponse<TaskAttachment>>(`/api/tasks/${taskId}/attachments/upload`, payload, {
+    auth: true,
+  });
+
+  return response.data;
+}
+
+export async function deleteTaskAttachment(taskId: string, attachmentId: string) {
+  await apiClient.delete<ApiResponse<object>>(`/api/tasks/${taskId}/attachments/${attachmentId}`, {
+    auth: true,
+  });
+}
+
+export async function downloadTaskAttachment(taskId: string, attachmentId: string, fileName: string) {
+  const fileBlob = await apiClient.blob(`/api/tasks/${taskId}/attachments/${attachmentId}/download`, {
+    auth: true,
+  });
+
+  const objectUrl = window.URL.createObjectURL(fileBlob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(objectUrl);
 }

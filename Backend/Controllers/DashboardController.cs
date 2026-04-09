@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using Backend.Services.Interfaces;
 
 [ApiController]
+[Asp.Versioning.ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/dashboard")]
 [Route("api/dashboard")]
 [Authorize]
 public class DashboardController : ControllerBase

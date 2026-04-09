@@ -157,7 +157,7 @@ public class ProjectService : IProjectService
             .AsNoTracking()
             .Where(pm => pm.ProjectId == projectId)
             .Join(
-                _context.Users.AsNoTracking(),
+                _context.Users.AsNoTracking().Where(user => !user.IsDeleted),
                 pm => pm.UserId,
                 user => user.Id,
                 (pm, user) => new ProjectMemberDto
@@ -177,7 +177,7 @@ public class ProjectService : IProjectService
         {
             var owner = await _context.Users
                 .AsNoTracking()
-                .FirstOrDefaultAsync(user => user.Id == project.OwnerUserId.Value);
+                .FirstOrDefaultAsync(user => user.Id == project.OwnerUserId.Value && !user.IsDeleted);
 
             if (owner != null)
             {
@@ -286,7 +286,7 @@ public class ProjectService : IProjectService
 
         var existingUser = await _context.Users
             .AsNoTracking()
-            .FirstOrDefaultAsync(user => user.Email.ToLower() == email);
+            .FirstOrDefaultAsync(user => !user.IsDeleted && user.Email.ToLower() == email);
 
         if (existingUser != null)
         {
@@ -370,7 +370,7 @@ public class ProjectService : IProjectService
         {
             var byId = await _context.Users
                 .AsNoTracking()
-                .FirstOrDefaultAsync(user => user.Id == dto.UserId.Value);
+                .FirstOrDefaultAsync(user => user.Id == dto.UserId.Value && !user.IsDeleted);
 
             if (byId == null)
                 throw new KeyNotFoundException("User not found");
@@ -381,7 +381,7 @@ public class ProjectService : IProjectService
         var email = NormalizeEmail(dto.Email);
         var byEmail = await _context.Users
             .AsNoTracking()
-            .FirstOrDefaultAsync(user => user.Email.ToLower() == email);
+            .FirstOrDefaultAsync(user => !user.IsDeleted && user.Email.ToLower() == email);
 
         if (byEmail == null)
             throw new KeyNotFoundException("User not found. Send an invitation instead");

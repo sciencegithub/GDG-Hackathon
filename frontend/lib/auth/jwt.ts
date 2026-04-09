@@ -14,6 +14,11 @@ const ID_CLAIM = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameiden
 const NAME_CLAIM = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name";
 const EMAIL_CLAIM = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress";
 
+const ID_CLAIM_CANDIDATES = [ID_CLAIM, "sub", "nameid"];
+const NAME_CLAIM_CANDIDATES = [NAME_CLAIM, "unique_name", "name"];
+const EMAIL_CLAIM_CANDIDATES = [EMAIL_CLAIM, "email"];
+const ROLE_CLAIM_CANDIDATES = [ROLE_CLAIM, "role"];
+
 function decodeBase64Url(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
@@ -54,14 +59,25 @@ export function getSessionUserFromToken(token: string): SessionUser | null {
     return null;
   }
 
-  const id = String(payload[ID_CLAIM] ?? "").trim();
-  const name = String(payload[NAME_CLAIM] ?? "").trim();
-  const email = String(payload[EMAIL_CLAIM] ?? "").trim();
-  const role = String(payload[ROLE_CLAIM] ?? "User").trim() || "User";
+  const id = getFirstStringClaim(payload, ID_CLAIM_CANDIDATES);
+  const name = getFirstStringClaim(payload, NAME_CLAIM_CANDIDATES);
+  const email = getFirstStringClaim(payload, EMAIL_CLAIM_CANDIDATES);
+  const role = getFirstStringClaim(payload, ROLE_CLAIM_CANDIDATES, "User") || "User";
 
   if (!id || !name || !email) {
     return null;
   }
 
   return { id, name, email, role };
+}
+
+function getFirstStringClaim(payload: JwtPayload, claimKeys: string[], fallback = "") {
+  for (const claimKey of claimKeys) {
+    const value = payload[claimKey];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return fallback;
 }

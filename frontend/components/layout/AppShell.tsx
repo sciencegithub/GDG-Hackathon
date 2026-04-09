@@ -12,10 +12,11 @@ const sidebarItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/tasks", label: "Tasks" },
   { href: "/projects", label: "Projects" },
+  { href: "/settings", label: "Settings" },
 ];
 
 function isProtectedPath(pathname: string) {
-  return ["/dashboard", "/tasks", "/task", "/projects"].some(
+  return ["/dashboard", "/tasks", "/task", "/projects", "/settings"].some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
 }

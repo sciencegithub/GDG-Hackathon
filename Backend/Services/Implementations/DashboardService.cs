@@ -72,6 +72,7 @@ public class DashboardService : IDashboardService
         // Get all users
         var allUsers = await _context.Users
             .AsNoTracking()
+            .Where(u => !u.IsDeleted)
             .ToListAsync();
 
         // Calculate basic stats

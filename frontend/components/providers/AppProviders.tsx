@@ -8,7 +8,7 @@ import { getAuthToken, clearAuthToken } from "@/services/auth/token-store";
 import { getSessionUserFromToken, isTokenExpired } from "@/lib/auth/jwt";
 import { useAuthStore } from "@/store/authStore";
 
-const protectedPrefixes = ["/dashboard", "/tasks", "/task", "/projects"];
+const protectedPrefixes = ["/dashboard", "/tasks", "/task", "/projects", "/settings"];
 const authPrefixes = ["/auth/login", "/auth/register"];
 
 function isProtectedPath(pathname: string) {
@@ -52,6 +52,17 @@ function RouteGuard() {
 
   useEffect(() => {
     if (isProtectedPath(pathname) && !isAuthenticated) {
+      const token = getAuthToken();
+      const hasHydratableSession = Boolean(
+        token &&
+        !isTokenExpired(token) &&
+        getSessionUserFromToken(token),
+      );
+
+      if (hasHydratableSession) {
+        return;
+      }
+
       router.replace("/auth/login");
       return;
     }

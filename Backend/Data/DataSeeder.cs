@@ -25,7 +25,7 @@ public class DataSeeder
         await EnsureProjectOwnerMembershipsAsync(projects, cancellationToken);
         await EnsureTasksAsync(targetTasks, users, projects, cancellationToken);
 
-        var userCount = await _context.Users.CountAsync(cancellationToken);
+        var userCount = await _context.Users.CountAsync(u => !u.IsDeleted, cancellationToken);
         var projectCount = await _context.Projects.CountAsync(cancellationToken);
         var taskCount = await _context.Tasks.CountAsync(cancellationToken);
 
@@ -39,6 +39,7 @@ public class DataSeeder
     private async Task<List<User>> EnsureUsersAsync(int targetUsers, string defaultPassword, CancellationToken cancellationToken)
     {
         var users = await _context.Users
+            .Where(u => !u.IsDeleted)
             .OrderBy(u => u.Email)
             .ToListAsync(cancellationToken);
 

@@ -99,7 +99,33 @@ export default function ProjectDetailPage() {
   };
 
   if (projectQuery.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading project...</p>;
+    return (
+      <div className="space-y-6">
+        <Card className="animate-pulse">
+          <CardHeader className="space-y-3">
+            <div className="h-8 w-64 rounded bg-muted" />
+            <div className="h-4 w-1/2 rounded bg-muted" />
+          </CardHeader>
+          <CardContent className="grid gap-3 pb-6 lg:grid-cols-2">
+            <div className="h-10 rounded bg-muted lg:col-span-2" />
+            <div className="h-10 rounded bg-muted lg:col-span-2" />
+            <div className="h-10 rounded bg-muted" />
+            <div className="h-10 rounded bg-muted" />
+          </CardContent>
+        </Card>
+
+        <Card className="animate-pulse">
+          <CardHeader className="space-y-3">
+            <div className="h-6 w-40 rounded bg-muted" />
+            <div className="h-4 w-2/3 rounded bg-muted" />
+          </CardHeader>
+          <CardContent className="space-y-3 pb-6">
+            <div className="h-16 rounded bg-muted" />
+            <div className="h-16 rounded bg-muted" />
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (projectQuery.isError || !projectQuery.data) {
@@ -183,7 +209,13 @@ export default function ProjectDetailPage() {
           <CardDescription>All tasks connected to this project.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 pb-6">
-          {tasksQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading tasks...</p> : null}
+          {tasksQuery.isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 2 }).map((_, index) => (
+                <div key={index} className="h-16 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : null}
           {tasksQuery.isError ? <p className="text-sm text-destructive">{getErrorMessage(tasksQuery.error)}</p> : null}
 
           {!tasksQuery.isLoading && !tasksQuery.isError ? (

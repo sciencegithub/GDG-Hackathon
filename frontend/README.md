@@ -55,7 +55,8 @@ Target structure:
 - [x] Add redirect if already authenticated
 - [x] Add role-based UI rendering
 - [x] Add invalid credential and loading state UX
-- [ ] Evaluate move to httpOnly cookie flow if backend supports it
+- [x] Evaluate move to httpOnly cookie flow if backend supports it
+	Result: added optional cookie mode (`NEXT_PUBLIC_USE_AUTH_COOKIES=true`) in API client while keeping bearer-token mode as default.
 
 ## 3. Dashboard (WOW Factor)
 
@@ -150,7 +151,7 @@ Target structure:
 - [x] Error states available
 - [x] Use optimistic updates for fast actions (status changes)
 - [x] Confirm destructive actions before delete
-- [ ] Avoid spinner-only pages when data is loading
+- [x] Avoid spinner-only pages when data is loading
 
 ## 13. MVP Frontend Checklist (Must Build First)
 
@@ -180,7 +181,13 @@ Target structure:
 
 ## Deployment Readiness
 
-- [ ] Configure production API URL
+- [x] Configure production API URL
 - [x] Add .env.example for frontend variables
-- [ ] Verify CORS and API integration in deployed environment
-- [ ] Final responsive QA pass (desktop + mobile)
+- [x] Verify CORS and API integration in deployed environment
+- [x] Final responsive QA pass (desktop + mobile)
+
+Deployment verification command:
+
+```bash
+npm run verify:deployment
+```

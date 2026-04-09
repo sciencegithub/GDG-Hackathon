@@ -193,8 +193,8 @@ export function TaskListPanel() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({ taskId, statusValue }: { taskId: string; statusValue: string }) =>
-      updateTaskStatus(taskId, statusValue),
+    mutationFn: ({ taskId, statusValue, rowVersion }: { taskId: string; statusValue: string; rowVersion?: number }) =>
+      updateTaskStatus(taskId, statusValue, rowVersion),
     onMutate: async ({ taskId, statusValue }) => {
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
 
@@ -267,7 +267,11 @@ export function TaskListPanel() {
           value={row.status}
           className="h-8 rounded-md border border-border bg-background px-2 text-xs"
           onChange={(event) =>
-            updateStatusMutation.mutate({ taskId: row.id, statusValue: event.target.value })
+            updateStatusMutation.mutate({
+              taskId: row.id,
+              statusValue: event.target.value,
+              rowVersion: row.rowVersion,
+            })
           }
         >
           {statusColumns.map((statusOption) => (
@@ -374,7 +378,7 @@ export function TaskListPanel() {
     }
   };
 
-  const handleColumnDragLeave = (statusValue: string) => (_event: DragEvent<HTMLDivElement>) => {
+  const handleColumnDragLeave = (statusValue: string) => () => {
     if (dragOverStatus === statusValue) {
       setDragOverStatus(null);
     }
@@ -395,7 +399,11 @@ export function TaskListPanel() {
       return;
     }
 
-    updateStatusMutation.mutate({ taskId: droppedTaskId, statusValue });
+    updateStatusMutation.mutate({
+      taskId: droppedTaskId,
+      statusValue,
+      rowVersion: droppedTask.rowVersion,
+    });
     resetDragState();
   };
 
@@ -504,7 +512,13 @@ export function TaskListPanel() {
             </div>
           </div>
 
-          {tasksQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading tasks...</p> : null}
+          {tasksQuery.isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-12 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : null}
           {tasksQuery.isError ? <p className="text-sm text-destructive">{getErrorMessage(tasksQuery.error)}</p> : null}
 
           {!tasksQuery.isLoading && !tasksQuery.isError ? (

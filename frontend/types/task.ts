@@ -11,6 +11,7 @@ export type TaskItem = {
   assignedUserId?: string | null;
   dueDate?: string | null;
   createdAt?: string;
+  rowVersion?: number;
 };
 
 export type TaskQuery = {
@@ -37,6 +38,7 @@ export type UpdateTaskInput = {
   priority: string;
   assignedUserId?: string | null;
   dueDate?: string | null;
+  rowVersion?: number;
 };
 
 export type TaskActivity = {
@@ -85,4 +87,16 @@ export type TaskComment = {
 
 export type CreateTaskCommentInput = {
   content: string;
+};
+
+export type TaskAttachment = {
+  id: string;
+  fileName: string;
+  fileSizeBytes: number;
+  fileExtension: string;
+  storagePath: string;
+  taskId: string;
+  uploadedByUserId: string;
+  uploadedByUserName: string;
+  uploadedAt: string;
 };
